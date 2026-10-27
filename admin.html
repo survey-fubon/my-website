@@ -18,6 +18,7 @@ button{cursor:pointer}.primary{background:var(--blue);border-color:var(--blue);c
 table{border-collapse:collapse;width:100%;font-size:14px}
 th,td{padding:8px 10px;border-bottom:1px solid #e5eef3;text-align:left;white-space:nowrap}
 td.n,th.n{text-align:right}
+th.wrap{white-space:normal;min-width:104px;line-height:1.35;vertical-align:bottom}
 .low{color:#b44430;font-weight:700}
 .stats{display:flex;gap:12px;flex-wrap:wrap}
 .stat{flex:1;min-width:140px;background:#f2f8fb;border-radius:10px;padding:12px 14px}
@@ -72,14 +73,14 @@ let h=`<div class="card stats"><div class="stat"><b>${R.length}</b>已填答分�
 h+=`<div class="card"><h2>各題平均</h2><table><tr><th>部門</th><th>題目</th><th class="n">平均</th><th>評等</th><th class="n">低於90分家數</th></tr>`;
 Q.forEach(q=>{const v=R.map(r=>r.scores[q[0]]),a=avg(v);
 h+=`<tr><td>${G[q[1]]}</td><td>${esc(q[2])}</td><td class="n${a<90?' low':''}">${f1(a)}</td><td>${grade(a)}</td><td class="n">${v.filter(n=>n<90).length}</td></tr>`});
-h+=`</table></div><div class="card"><h2>各分公司分數</h2><table><tr><th>分公司</th><th>主管</th>${Q.map(q=>`<th class="n">${q[0].toUpperCase()}</th>`).join('')}<th class="n">平均</th><th>最後更新</th></tr>`;
+h+=`</table></div><div class="card"><h2>各分公司分數</h2><table><tr><th>分公司</th><th>主管</th>${Q.map(q=>`<th class="n wrap">${esc(G[q[1]])}<br>${esc(q[2])}</th>`).join('')}<th class="n">平均</th><th>最後更新</th></tr>`;
 R.forEach(r=>{const v=Q.map(q=>r.scores[q[0]]);
 h+=`<tr><td>${esc(r.branch)}</td><td>${esc(r.manager)}</td>${v.map(n=>`<td class="n${n<90?' low':''}">${n}</td>`).join('')}<td class="n">${f1(avg(v))}</td><td>${new Date(r.updated_at).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false})}</td></tr>`});
 h+=`</table></div>`;
 ['A','B'].forEach(g=>{
 const L=R.filter(r=>(r.feedback[g]||'').trim());
 h+=`<div class="card"><h2>${G[g]}｜建議與須改善事項</h2>`+(L.length?L.map(r=>{
-const low=Q.filter(q=>q[1]===g&&r.scores[q[0]]<90).map(q=>q[0].toUpperCase()+' '+r.scores[q[0]]+'分').join('、');
+const low=Q.filter(q=>q[1]===g&&r.scores[q[0]]<90).map(q=>q[2]+' '+r.scores[q[0]]+'分').join('、');
 return `<div class="fb"><div class="m">${esc(r.branch)}・${esc(r.manager)}${low?'・<span class="low">'+esc(low)+'</span>':''}</div><p>${esc(r.feedback[g])}</p></div>`}).join(''):'<div class="muted">無</div>')+`</div>`});
 $('view').innerHTML=h;
 }
@@ -94,7 +95,7 @@ $('out').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('csv').onclick=()=>{
 const R=rows.filter(r=>r.period===$('period').value);
 const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-const head=['調查期間','分公司','主管',...Q.map(q=>q[0].toUpperCase()+' '+q[2]),'個業服務部建議','產業研究部建議','最後更新'];
+const head=['調查期間','分公司','主管',...Q.map(q=>G[q[1]]+'｜'+q[2]),'個業服務部建議','產業研究部建議','最後更新'];
 const lines=[head,...R.map(r=>[r.period,r.branch,r.manager,...Q.map(q=>r.scores[q[0]]),r.feedback.A,r.feedback.B,r.updated_at])].map(l=>l.map(c).join(','));
 const a=document.createElement('a');
 a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv'}));
