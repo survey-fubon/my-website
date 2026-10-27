@@ -82,7 +82,7 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 <header>
 <div class="header-inner">
 <div class="brand">富邦投顧<small>FUBON INVESTMENT SERVICES</small></div>
-<span class="pill">分公司主管試填</span>
+<span class="pill">分公司主管填答</span>
 </div>
 </header>
 <main>
@@ -91,7 +91,7 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 <h1>每季滿意度調查</h1>
 <p>個業服務部・產業研究部</p>
 </div>
-<div class="notice"><strong>預覽試填版</strong>｜尚未連接公司帳號或信箱。可試填、送出及返回修改；重新整理或關閉頁面後資料會清除。</div>
+<div class="notice"><strong>填答說明</strong>｜送出後資料會儲存，仍可返回修改同一份問卷（以調查期間、分公司、主管姓名識別）。</div>
 
 <form id="survey" novalidate>
 <section class="card">
@@ -99,7 +99,7 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 <div class="grid">
 <div>
 <label for="period">調查期間</label>
-<input id="period" value="2026 年第三季" readonly>
+<input id="period" readonly>
 </div>
 <div>
 <label for="date">當天日期（臺灣時間）</label>
@@ -114,7 +114,7 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 <input id="manager" maxlength="50" required autocomplete="name" placeholder="請輸入主管姓名">
 </div>
 </div>
-<p class="muted">本次試填無須登入，姓名僅用於本頁顯示。正式版預計以公司 Microsoft 365 帳號識別填答者。</p>
+<p class="muted">本次無須登入；分公司與姓名用於識別並更新您的同一份填答。</p>
 </section>
 
 <section class="card">
@@ -166,15 +166,15 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 <div id="error" class="error hidden" role="alert" tabindex="-1"></div>
 <div class="actions">
 <span class="muted" id="editHint">* 為必填欄位</span>
-<button class="primary" id="submitButton" type="submit">送出（試填）</button>
+<button class="primary" id="submitButton" type="submit">送出</button>
 </div>
 </form>
 
 <div id="review" class="hidden" aria-live="polite">
 <section class="card">
 <div class="result-icon" aria-hidden="true">✓</div>
-<h2 class="success-title" id="resultTitle" tabindex="-1">已完成試填</h2>
-<p class="muted">本頁已保留您的試填內容，尚未寄送 Email。可返回修改同一份問卷。</p>
+<h2 class="success-title" id="resultTitle" tabindex="-1">已完成填寫</h2>
+<p class="muted">您的填答已儲存。可返回修改同一份問卷。</p>
 <div id="summary"></div>
 </section>
 <div class="actions">
@@ -183,9 +183,17 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 </div>
 </div>
 
-<div class="foot">預定正式通知收件人：sherry.ph.peng@fubon.com<br>富邦藍綠配色試作・本頁尚未正式上線</div>
+
 </main>
 <script>
+const SUPABASE_URL='https://wjtczazmnxijqgnnndmp.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGN6YXptbnhpanFnbm5uZG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNzQ0MDYsImV4cCI6MjEwODY1MDQwNn0.lvUXwnfqvs9OVi5EgmrgVEplJpbhPmmHRedpl4vbJoo';
+async function save(d){
+const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/submit_survey',{method:'POST',
+headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY},
+body:JSON.stringify({p_period:d.period,p_branch:d.branch,p_manager:d.manager,p_scores:d.scores,p_feedback:d.feedback})});
+if(!r.ok)throw new Error('HTTP '+r.status);
+}
 const $=id=>document.getElementById(id);
 const questions=[
 {id:'a',group:'A',name:'刊物｜日、周刊物',detail:'每日行動快訊、盤後快訊；台股／海外股周報'},
@@ -219,7 +227,11 @@ if(text!==undefined)node.textContent=text;
 if(className)node.className=className;
 return node;
 }
-function refreshDate(){$('date').value=today()}
+function currentPeriod(){
+const [y,m]=today().split('-').map(Number);
+return y+' 年第'+['一','二','三','四'][Math.floor((m-1)/3)]+'季';
+}
+function refreshDate(){$('date').value=today();$('period').value=currentPeriod()}
 refreshDate();
 window.addEventListener('focus',refreshDate);
 document.addEventListener('visibilitychange',()=>{
@@ -298,13 +310,13 @@ element('div',submitted.feedback[group]||'未填寫','answer')
 output.append(section);
 });
 output.append(element('p','主管已勾選內容確認。','muted'));
-$('resultTitle').textContent=editCount?'試填內容已更新':'已完成試填';
+$('resultTitle').textContent=editCount?'填答內容已更新':'已完成填寫';
 $('survey').classList.add('hidden');
 $('review').classList.remove('hidden');
 $('resultTitle').focus({preventScroll:true});
 window.scrollTo({top:0,behavior:'smooth'});
 }
-$('survey').addEventListener('submit',event=>{
+$('survey').addEventListener('submit',async event=>{
 event.preventDefault();
 refreshDate();
 updateRequirements();
@@ -332,15 +344,23 @@ $('error').scrollIntoView({behavior:'smooth',block:'center'});
 return;
 }
 $('error').classList.add('hidden');
-if(firstTime)editCount++;else firstTime=timestamp();
-lastTime=timestamp();
-submitted={
+const draft={
 period:$('period').value,
 branch:$('branch').value.trim(),
 manager:$('manager').value.trim(),
 scores:Object.fromEntries(questions.map(q=>[q.id,Number($(q.id).value)])),
 feedback:{A:$('feedbackA').value.trim(),B:$('feedbackB').value.trim()}
 };
+const btn=$('submitButton');btn.disabled=true;
+try{await save(draft)}catch(e){
+btn.disabled=false;
+$('error').textContent='送出失敗，資料尚未儲存。請檢查網路後再按一次送出。';
+$('error').classList.remove('hidden');$('error').focus({preventScroll:true});return;
+}
+btn.disabled=false;
+if(firstTime)editCount++;else firstTime=timestamp();
+lastTime=timestamp();
+submitted=draft;
 showSummary();
 });
 $('edit').addEventListener('click',()=>{
@@ -348,7 +368,7 @@ $('review').classList.add('hidden');
 $('survey').classList.remove('hidden');
 $('consent').checked=false;
 refreshDate();
-$('submitButton').textContent='儲存修改（試填）';
+$('submitButton').textContent='儲存修改';
 $('editHint').textContent='正在修改原問卷，請重新確認內容';
 $('branch').focus({preventScroll:true});
 window.scrollTo({top:0,behavior:'smooth'});
