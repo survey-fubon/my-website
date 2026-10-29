@@ -107,7 +107,7 @@ main{padding:0;max-width:none}.hero{background:white;color:var(--ink);padding:0}
 </div>
 <div>
 <label for="branch">分公司／單位 <span class="req">*</span></label>
-<input id="branch" maxlength="80" required placeholder="請輸入分公司或單位名稱">
+<select id="branch" required><option value="">載入中…</option></select>
 </div>
 <div>
 <label for="manager">主管姓名 <span class="req">*</span></label>
@@ -195,6 +195,12 @@ body:JSON.stringify({p_period:d.period,p_branch:d.branch,p_manager:d.manager,p_s
 if(!r.ok)throw new Error('HTTP '+r.status);
 }
 const $=id=>document.getElementById(id);
+(async()=>{const s=$('branch');
+try{const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/list_units',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY},body:'{}'});
+if(!r.ok)throw 0;const u=await r.json();
+const g=k=>{const x=u.filter(i=>i.kind===k);return x.length?'<optgroup label="'+k+'">'+x.map(i=>'<option>'+i.name+'</option>').join('')+'</optgroup>':''};
+s.innerHTML='<option value="">請選擇</option>'+g('總公司單位')+g('區部')+g('分公司');
+}catch(e){const i=document.createElement('input');i.id='branch';i.maxLength=80;i.required=true;i.placeholder='請輸入分公司或單位名稱';s.replaceWith(i)}})();
 const questions=[
 {id:'a',group:'A',name:'刊物｜日、周刊物',detail:'每日行動快訊、盤後快訊；台股／海外股周報'},
 {id:'b',group:'A',name:'刊物｜特色及市場脈動資訊',detail:'議題、新聞；營收／高殖利股資訊'},
