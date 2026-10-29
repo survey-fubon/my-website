@@ -61,7 +61,7 @@ const pkey=p=>{const m=/(\d+) 年第(.)季/.exec(p);return m?m[1]*10+(QN[m[2]]||
 const prevPeriod=p=>{const m=/(\d+) 年第(.)季/.exec(p);if(!m)return '';let y=+m[1],q=QN[m[2]]-1;if(!q){y--;q=4}return y+' 年第'+'一二三四'[q-1]+'季'};
 const dAvg=(r,d)=>avg(d.items.map(i=>r.scores[i[0]]));
 const prevAvg=(branch,d,pp)=>avg(expand(pp).filter(r=>r.branch===branch).map(r=>dAvg(r,d)));
-let rows=[],links=[];
+let rows=[],links=[],units=[];
 function expand(p){const base=rows.filter(r=>r.period===p),own=new Set(base.map(r=>r.branch)),ex=[];
 links.forEach(l=>{const s=base.find(r=>r.branch===l.source_branch);
 if(s&&!own.has(l.linked_branch)){own.add(l.linked_branch);ex.push({...s,branch:l.linked_branch,linkedFrom:l.source_branch})}});
@@ -71,20 +71,32 @@ const {data,error}=await sb.from('survey_responses').select('*');
 if(error){$('lerr').textContent='讀取失敗：'+error.message;return false}
 rows=data;
 const L=await sb.from('branch_links').select('*');links=L.data||[];
+const UN=await sb.from('survey_units').select('*').order('sort_no');units=UN.data||[];
 const ps=[...new Set(rows.map(r=>r.period))].sort((a,b)=>pkey(b)-pkey(a));
 $('period').innerHTML=ps.map(p=>`<option>${esc(p)}</option>`).join('');
 $('login').classList.add('hidden');$('bar').classList.remove('hidden');$('view').classList.remove('hidden');
 render();return true;
 }
+const ordOf=b=>{const u=units.find(x=>x.name===b);return u?u.sort_no:9999};
+function missCard(R){
+if(!units.length)return '';
+const got=new Set(R.map(r=>r.branch)),miss=units.filter(u=>!got.has(u.name));
+const extra=R.filter(r=>!r.linkedFrom&&!units.some(u=>u.name===r.branch));
+const g={};miss.forEach(u=>{const k=u.kind==='分公司'?u.parent:u.kind;(g[k]=g[k]||[]).push(u.name)});
+let h=`<div class="card"><h2>尚未回覆名單（${miss.length}／${units.length}）</h2>`;
+h+=miss.length?`<table><tr><th>所屬</th><th>尚未回覆</th></tr>`+Object.entries(g).map(([k,v])=>`<tr><td>${esc(k)}</td><td style="white-space:normal">${v.map(esc).join('、')}</td></tr>`).join('')+`</table>`:'<div>全部單位都已回覆 ✓</div>';
+if(extra.length)h+=`<p class="err">名單外的填答（名稱可能不一致）：${extra.map(r=>esc(r.branch)).join('、')}</p>`;
+return h+`</div>`}
 function render(){
 const p=$('period').value,pp=prevPeriod(p);
-const R=expand(p).sort((a,b)=>a.branch.localeCompare(b.branch,'zh-Hant'));
+const R=expand(p).sort((a,b)=>(ordOf(a.branch)-ordOf(b.branch))||a.branch.localeCompare(b.branch,'zh-Hant'));
 if(!R.length){$('view').innerHTML='<div class="card">尚無填答資料。</div>';return}
 const dAvgs=D.map(d=>avg(R.map(r=>dAvg(r,d))));
 const lows=R.flatMap(r=>ALL.map(i=>r.scores[i[0]])).filter(n=>isNum(n)&&n<90).length;
-let h=`<div class="card stats"><div class="stat"><b>${R.length}</b>已填答分公司／單位</div>`+
+let h=`<div class="card stats"><div class="stat"><b>${R.length}${units.length?'／'+units.length:''}</b>已填答單位</div>`+
 D.map((d,x)=>`<div class="stat"><b class="${lowc(dAvgs[x]).trim()}">${f1(dAvgs[x])}</b>${d.name}・所有分公司平均</div>`).join('')+
 `<div class="stat"><b>${lows}</b>低於 90 分的項目數</div></div>`;
+h+=missCard(R);
 D.forEach((d,x)=>{
 const cats=['刊物','服務'].map(c=>[c,d.items.filter(i=>i[1]===c)]).filter(c=>c[1].length);
 const ord=cats.flatMap(c=>c[1]);
