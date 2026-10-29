@@ -10,21 +10,22 @@
 body{margin:0;background:#eef6fa;color:var(--ink);font-family:system-ui,"Microsoft JhengHei",sans-serif;line-height:1.6}
 header{background:white;border-top:6px solid var(--green);border-bottom:1px solid var(--line);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 header b{color:var(--blue);font-size:19px}
-main{max-width:1000px;margin:auto;padding:22px 16px 50px}
+main{max-width:1100px;margin:auto;padding:22px 16px 50px}
 .card{background:white;border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0;overflow-x:auto}
 h2{margin:0 0 12px;font-size:17px}
 input,select,button{font:inherit;padding:9px 12px;border:1px solid #bccfdc;border-radius:8px;background:white;color:var(--ink)}
 button{cursor:pointer}.primary{background:var(--blue);border-color:var(--blue);color:white;font-weight:700}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th,td{padding:8px 10px;border-bottom:1px solid #e5eef3;text-align:left;white-space:nowrap}
-td.n,th.n{text-align:right}
-th.wrap{white-space:normal;min-width:104px;line-height:1.35;vertical-align:bottom}
+td.n,th.n{text-align:right}th.c{text-align:center;background:#edf7fa}
+th.wrap{white-space:normal;min-width:96px;line-height:1.35;vertical-align:bottom}
+td.fbk{white-space:pre-wrap;min-width:200px;max-width:340px;overflow-wrap:anywhere;font-size:13px}
+tr.avg td{font-weight:700;background:#f2f8fb;border-top:2px solid var(--blue)}
+.sub{color:#688291;font-size:12px;font-weight:400}
 .low{color:#b44430;font-weight:700}
 .stats{display:flex;gap:12px;flex-wrap:wrap}
-.stat{flex:1;min-width:140px;background:#f2f8fb;border-radius:10px;padding:12px 14px}
+.stat{flex:1;min-width:150px;background:#f2f8fb;border-radius:10px;padding:12px 14px}
 .stat b{display:block;font-size:26px;color:var(--blue)}
-.fb{border-top:1px solid #e5eef3;padding:10px 0;font-size:14px}
-.fb .m{color:#688291;font-size:12px}.fb p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .hidden{display:none!important}.err{color:#a63423;margin:8px 0}
 #login{max-width:360px;margin:60px auto}#login input{width:100%;margin:6px 0}
 </style>
@@ -46,42 +47,60 @@ const SUPABASE_URL='https://wjtczazmnxijqgnnndmp.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGN6YXptbnhpanFnbm5uZG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNzQ0MDYsImV4cCI6MjEwODY1MDQwNn0.lvUXwnfqvs9OVi5EgmrgVEplJpbhPmmHRedpl4vbJoo';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
-const Q=[['a','A','刊物｜日、周刊物'],['b','A','刊物｜特色及市場脈動資訊'],['c','A','服務｜投資講座及 VIP 諮詢'],['d','A','服務｜分公司聯繫、支援'],['e','B','刊物｜研究刊物'],['f','B','服務｜VIP 相關支援']];
-const G={A:'個業服務部',B:'產業研究部'};
+const D=[
+{k:'A',name:'個業服務部',items:[['a','刊物','日、周刊物'],['b','刊物','特色及市場脈動資訊'],['c','服務','投資講座及 VIP 相關投資諮詢協助'],['d','服務','分公司聯繫、支援']]},
+{k:'B',name:'產業研究部',items:[['e','刊物','研究刊物'],['f','服務','VIP 相關支援協助服務']]}];
+const ALL=D.flatMap(d=>d.items);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const grade=n=>n>=96?'非常滿意':n>=93?'滿意':n>=90?'普通':n>=70?'不滿意':'非常不滿意';
-const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
-const f1=n=>n===null?'—':n.toFixed(1);
-const cls=n=>n!==null&&n<90?' class="low"':'';
-let rows=[];
+const isNum=n=>typeof n==='number'&&!isNaN(n);
+const lowc=n=>isNum(n)&&n<90?' low':'';
+const avg=a=>{a=a.filter(isNum);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null};
+const f1=n=>isNum(n)?n.toFixed(1):'—';
+const QN={'一':1,'二':2,'三':3,'四':4};
+const pkey=p=>{const m=/(\d+) 年第(.)季/.exec(p);return m?m[1]*10+(QN[m[2]]||0):0};
+const prevPeriod=p=>{const m=/(\d+) 年第(.)季/.exec(p);if(!m)return '';let y=+m[1],q=QN[m[2]]-1;if(!q){y--;q=4}return y+' 年第'+'一二三四'[q-1]+'季'};
+const dAvg=(r,d)=>avg(d.items.map(i=>r.scores[i[0]]));
+const prevAvg=(branch,d,pp)=>avg(expand(pp).filter(r=>r.branch===branch).map(r=>dAvg(r,d)));
+let rows=[],links=[];
+function expand(p){const base=rows.filter(r=>r.period===p),own=new Set(base.map(r=>r.branch)),ex=[];
+links.forEach(l=>{const s=base.find(r=>r.branch===l.source_branch);
+if(s&&!own.has(l.linked_branch)){own.add(l.linked_branch);ex.push({...s,branch:l.linked_branch,linkedFrom:l.source_branch})}});
+return [...base,...ex]}
 async function load(){
-const {data,error}=await sb.from('survey_responses').select('*').order('branch');
+const {data,error}=await sb.from('survey_responses').select('*');
 if(error){$('lerr').textContent='讀取失敗：'+error.message;return false}
 rows=data;
-const ps=[...new Set(rows.map(r=>r.period))].sort().reverse();
+const L=await sb.from('branch_links').select('*');links=L.data||[];
+const ps=[...new Set(rows.map(r=>r.period))].sort((a,b)=>pkey(b)-pkey(a));
 $('period').innerHTML=ps.map(p=>`<option>${esc(p)}</option>`).join('');
 $('login').classList.add('hidden');$('bar').classList.remove('hidden');$('view').classList.remove('hidden');
 render();return true;
 }
 function render(){
-const p=$('period').value,R=rows.filter(r=>r.period===p);
+const p=$('period').value,pp=prevPeriod(p);
+const R=expand(p).sort((a,b)=>a.branch.localeCompare(b.branch,'zh-Hant'));
 if(!R.length){$('view').innerHTML='<div class="card">尚無填答資料。</div>';return}
-const all=R.flatMap(r=>Q.map(q=>r.scores[q[0]]));
-let h=`<div class="card stats"><div class="stat"><b>${R.length}</b>已填答分公司</div>
-<div class="stat"><b${cls(avg(all))}>${f1(avg(all))}</b>整體平均分（${grade(avg(all))}）</div>
-<div class="stat"><b>${all.filter(n=>n<90).length}</b>低於 90 分的項目數</div></div>`;
-h+=`<div class="card"><h2>各題平均</h2><table><tr><th>部門</th><th>題目</th><th class="n">平均</th><th>評等</th><th class="n">低於90分家數</th></tr>`;
-Q.forEach(q=>{const v=R.map(r=>r.scores[q[0]]),a=avg(v);
-h+=`<tr><td>${G[q[1]]}</td><td>${esc(q[2])}</td><td class="n${a<90?' low':''}">${f1(a)}</td><td>${grade(a)}</td><td class="n">${v.filter(n=>n<90).length}</td></tr>`});
-h+=`</table></div><div class="card"><h2>各分公司分數</h2><table><tr><th>分公司</th><th>主管</th>${Q.map(q=>`<th class="n wrap">${esc(G[q[1]])}<br>${esc(q[2])}</th>`).join('')}<th class="n">平均</th><th>最後更新</th></tr>`;
-R.forEach(r=>{const v=Q.map(q=>r.scores[q[0]]);
-h+=`<tr><td>${esc(r.branch)}</td><td>${esc(r.manager)}</td>${v.map(n=>`<td class="n${n<90?' low':''}">${n}</td>`).join('')}<td class="n">${f1(avg(v))}</td><td>${new Date(r.updated_at).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false})}</td></tr>`});
-h+=`</table></div>`;
-['A','B'].forEach(g=>{
-const L=R.filter(r=>(r.feedback[g]||'').trim());
-h+=`<div class="card"><h2>${G[g]}｜建議與須改善事項</h2>`+(L.length?L.map(r=>{
-const low=Q.filter(q=>q[1]===g&&r.scores[q[0]]<90).map(q=>q[2]+' '+r.scores[q[0]]+'分').join('、');
-return `<div class="fb"><div class="m">${esc(r.branch)}・${esc(r.manager)}${low?'・<span class="low">'+esc(low)+'</span>':''}</div><p>${esc(r.feedback[g])}</p></div>`}).join(''):'<div class="muted">無</div>')+`</div>`});
+const dAvgs=D.map(d=>avg(R.map(r=>dAvg(r,d))));
+const lows=R.flatMap(r=>ALL.map(i=>r.scores[i[0]])).filter(n=>isNum(n)&&n<90).length;
+let h=`<div class="card stats"><div class="stat"><b>${R.length}</b>已填答分公司／單位</div>`+
+D.map((d,x)=>`<div class="stat"><b class="${lowc(dAvgs[x]).trim()}">${f1(dAvgs[x])}</b>${d.name}・所有分公司平均</div>`).join('')+
+`<div class="stat"><b>${lows}</b>低於 90 分的項目數</div></div>`;
+D.forEach((d,x)=>{
+const cats=['刊物','服務'].map(c=>[c,d.items.filter(i=>i[1]===c)]).filter(c=>c[1].length);
+const ord=cats.flatMap(c=>c[1]);
+h+=`<div class="card"><h2>${d.name}</h2><table><tr><th rowspan="2">分公司／主管</th>`+
+cats.map(c=>`<th class="c" colspan="${c[1].length}">${c[0]}</th>`).join('')+
+`<th class="n wrap" rowspan="2">合計<br>平均</th><th class="n wrap" rowspan="2">前期平均<div class="sub">${esc(pp)}</div></th><th rowspan="2">建議</th></tr><tr>`+
+ord.map(i=>`<th class="n wrap">${esc(i[2])}</th>`).join('')+`</tr>`;
+const pvs=[];
+R.forEach(r=>{const a=dAvg(r,d),pv=prevAvg(r.branch,d,pp);pvs.push(pv);
+h+=`<tr><td>${esc(r.branch)}<div class="sub">${esc(r.manager)}${r.linkedFrom?'・連結自 '+esc(r.linkedFrom):''}</div></td>`+
+ord.map(i=>{const n=r.scores[i[0]];return `<td class="n${lowc(n)}">${isNum(n)?n:'—'}</td>`}).join('')+
+`<td class="n${lowc(a)}">${f1(a)}</td><td class="n">${f1(pv)}</td><td class="fbk">${esc(r.feedback[d.k]||'')}</td></tr>`});
+h+=`<tr class="avg"><td>平均</td>`+
+ord.map(i=>{const a=avg(R.map(r=>r.scores[i[0]]));return `<td class="n${lowc(a)}">${f1(a)}</td>`}).join('')+
+`<td class="n${lowc(dAvgs[x])}">${f1(dAvgs[x])}</td><td class="n">${f1(avg(pvs))}</td><td></td></tr></table></div>`;
+});
 $('view').innerHTML=h;
 }
 $('period').onchange=render;
@@ -93,10 +112,11 @@ load();
 };
 $('out').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('csv').onclick=()=>{
-const R=rows.filter(r=>r.period===$('period').value);
+const R=expand($('period').value);
 const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-const head=['調查期間','分公司','主管',...Q.map(q=>G[q[1]]+'｜'+q[2]),'個業服務部建議','產業研究部建議','最後更新'];
-const lines=[head,...R.map(r=>[r.period,r.branch,r.manager,...Q.map(q=>r.scores[q[0]]),r.feedback.A,r.feedback.B,r.updated_at])].map(l=>l.map(c).join(','));
+const head=['調查期間','分公司','主管',...D.flatMap(d=>d.items.map(i=>d.name+'｜'+i[1]+'｜'+i[2])),'個業服務部平均','產業研究部平均','個業服務部建議','產業研究部建議','最後更新'];
+const line=r=>{const da=D.map(d=>dAvg(r,d));return [r.period,r.branch,r.manager,...ALL.map(i=>r.scores[i[0]]),...da.map(f1),r.feedback.A,r.feedback.B,r.updated_at]};
+const lines=[head,...R.map(line)].map(l=>l.map(c).join(','));
 const a=document.createElement('a');
 a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv'}));
 a.download='滿意度調查_'+$('period').value+'.csv';a.click();
