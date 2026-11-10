@@ -71,6 +71,9 @@ button:focus-visible{outline:3px solid #90d9f8;outline-offset:3px}
 .reminder{padding:13px 15px}
 }
 @page{size:A4;margin:9mm}
+#sigCanvas{width:100%;height:auto;border:1px dashed #9cb8c9;border-radius:8px;background:#fff;touch-action:none;display:block}
+.sigtabs{display:flex;gap:8px;margin-bottom:8px}.sigtabs button{padding:7px 14px}
+#sigClear{padding:3px 10px;font-size:12px}
 @media print{
 html{font-size:12px}
 body{background:white;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -101,7 +104,7 @@ h2{font-size:14px;margin:0 0 4px}
 <h1>每季滿意度調查</h1>
 <p>個業服務部・產業研究部</p>
 </div>
-<div class="notice"><strong>填答說明</strong>｜送出後資料會儲存，仍可返回修改同一份問卷（以調查期間、分公司、主管姓名識別）。</div>
+<div class="notice"><strong>填答說明</strong>｜送出後資料會儲存，仍可返回修改同一份問卷（以調查期間、分公司識別）。</div>
 
 <form id="survey" novalidate>
 <section class="card">
@@ -119,12 +122,8 @@ h2{font-size:14px;margin:0 0 4px}
 <label for="branch">分公司／單位 <span class="req">*</span></label>
 <select id="branch" required><option value="">載入中…</option></select>
 </div>
-<div>
-<label for="manager">主管姓名 <span class="req">*</span></label>
-<input id="manager" maxlength="50" required autocomplete="name" placeholder="請輸入主管姓名">
 </div>
-</div>
-<p class="muted">本次無須登入；分公司與姓名用於識別並更新您的同一份填答。</p>
+<p class="muted">本次無須登入；同一季同一分公司只會保留最新送出的一份。</p>
 </section>
 
 <section class="card">
@@ -167,11 +166,18 @@ h2{font-size:14px;margin:0 0 4px}
 </section>
 
 <section class="card">
-<h2><span class="num">06</span>內容確認</h2>
+<h2><span class="num">06</span>內容確認與簽名</h2>
 <label class="check">
 <input id="consent" type="checkbox" required>
 <span>我已確認以上評分與反饋內容。送出後仍可返回修改。<span class="req">*</span></span>
 </label>
+<div style="margin-top:16px">
+<label>主管簽名 <span class="req">*</span></label>
+<div class="sigtabs"><button type="button" id="sigDrawBtn" class="primary">手寫簽名</button><button type="button" id="sigTypeBtn">打字簽名</button></div>
+<div id="sigDraw"><canvas id="sigCanvas" width="600" height="180"></canvas><div class="muted">請在框內簽名　<button type="button" id="sigClear">清除重寫</button></div></div>
+<div id="sigType" class="hidden"><input id="sigText" maxlength="50" placeholder="請輸入姓名作為簽名"></div>
+</div>
+<p class="muted">簽名可選擇手寫或打字。</p>
 </section>
 <div id="error" class="error hidden" role="alert" tabindex="-1"></div>
 <div class="actions">
@@ -201,16 +207,29 @@ const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 async function save(d){
 const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/submit_survey',{method:'POST',
 headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY},
-body:JSON.stringify({p_period:d.period,p_branch:d.branch,p_manager:d.manager,p_scores:d.scores,p_feedback:d.feedback})});
+body:JSON.stringify({p_period:d.period,p_branch:d.branch,p_manager:d.manager,p_sig_type:d.sigType,p_signature:d.signature,p_scores:d.scores,p_feedback:d.feedback})});
 if(!r.ok)throw new Error('HTTP '+r.status);
 }
 const $=id=>document.getElementById(id);
-(async()=>{const s=$('branch');
+let sigMode='draw',sigDirty=false,drawing=false;
+const cv=$('sigCanvas'),cx=cv.getContext('2d');
+cx.lineWidth=2.5;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#173d56';
+const pos=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+cv.addEventListener('pointerdown',e=>{drawing=true;cv.setPointerCapture(e.pointerId);const [x,y]=pos(e);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+.1,y+.1);cx.stroke();sigDirty=true;e.preventDefault()});
+cv.addEventListener('pointermove',e=>{if(!drawing)return;const [x,y]=pos(e);cx.lineTo(x,y);cx.stroke()});
+['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drawing=false}));
+$('sigClear').onclick=()=>{cx.clearRect(0,0,cv.width,cv.height);sigDirty=false};
+function setSig(m){sigMode=m;$('sigDraw').classList.toggle('hidden',m!=='draw');$('sigType').classList.toggle('hidden',m!=='type');
+$('sigDrawBtn').classList.toggle('primary',m==='draw');$('sigTypeBtn').classList.toggle('primary',m==='type');
+}
+$('sigDrawBtn').onclick=()=>setSig('draw');$('sigTypeBtn').onclick=()=>setSig('type');
+const FB=[['總公司單位','經紀商品部','數位金融部'],['區部','北一區部','北二區部','北三區部','北四區部','桃竹區部','中一區部','中二區部','南一區部','南二區部'],['分公司','台北','仁愛','南港','內湖','木柵','新店','建國','敦南','南京','陽明','基隆','宜蘭','羅東','花蓮','板橋','新板','三重','新莊','永和','樹林','三峽','桃園','八德','中壢','青埔','新竹','竹科','竹北','竹東','頭份','苗栗','豐原','台中','公益','南屯','彰化','和美','員林','南員林','二林','斗六','虎尾','北港','嘉義','台南','永康','新營','高雄','七賢','左營','港都','岡山','屏東','台東']];
+(async()=>{const s=$('branch');let u;
 try{const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/list_units',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY},body:'{}'});
-if(!r.ok)throw 0;const u=await r.json();
+if(!r.ok)throw 0;u=await r.json();if(!u.length)throw 0}catch(e){u=FB.flatMap(g=>g.slice(1).map(n=>({kind:g[0],name:n})))}
 const g=k=>{const x=u.filter(i=>i.kind===k);return x.length?'<optgroup label="'+k+'">'+x.map(i=>'<option>'+i.name+'</option>').join('')+'</optgroup>':''};
 s.innerHTML='<option value="">請選擇</option>'+g('總公司單位')+g('區部')+g('分公司');
-}catch(e){const i=document.createElement('input');i.id='branch';i.maxLength=80;i.required=true;i.placeholder='請輸入分公司或單位名稱';s.replaceWith(i)}})();
+})();
 const questions=[
 {id:'a',group:'A',name:'刊物｜日、周刊物',detail:'每日行動快訊、盤後快訊；台股／海外股周報'},
 {id:'b',group:'A',name:'刊物｜特色及市場脈動資訊',detail:'議題、新聞；營收／高殖利股資訊'},
@@ -305,7 +324,10 @@ const output=$('summary');
 output.replaceChildren();
 addRow(output,'調查期間',submitted.period);
 addRow(output,'分公司／單位',submitted.branch);
-addRow(output,'主管姓名',submitted.manager);
+const sr=element('div',undefined,'row');sr.append(element('span','主管簽名'));
+if(submitted.sigType==='draw'){const im=document.createElement('img');im.src=submitted.signature;im.alt='主管簽名';im.style.cssText='height:60px;max-width:60%';sr.append(im)}
+else sr.append(element('strong',submitted.signature));
+output.append(sr);
 output.append(
 element('p','首次送出：'+firstTime,'muted'),
 element('p','最近更新：'+lastTime+'（臺灣時間）','muted')
@@ -338,7 +360,8 @@ refreshDate();
 updateRequirements();
 const errors=[];
 if(!$('branch').value.trim())errors.push('請填寫分公司／單位。');
-if(!$('manager').value.trim())errors.push('請填寫主管姓名。');
+if(sigMode==='draw'&&!sigDirty)errors.push('請簽名，或改用「打字簽名」。');
+if(sigMode==='type'&&!$('sigText').value.trim())errors.push('請輸入打字簽名。');
 questions.forEach(q=>{
 const input=$(q.id),value=input.value,n=Number(value);
 const invalid=value===''||!Number.isInteger(n)||n<0||n>100;
@@ -363,7 +386,9 @@ $('error').classList.add('hidden');
 const draft={
 period:$('period').value,
 branch:$('branch').value.trim(),
-manager:$('manager').value.trim(),
+manager:sigMode==='type'?$('sigText').value.trim():'（手寫簽名）',
+sigType:sigMode,
+signature:sigMode==='draw'?cv.toDataURL('image/png'):$('sigText').value.trim(),
 scores:Object.fromEntries(questions.map(q=>[q.id,Number($(q.id).value)])),
 feedback:{A:$('feedbackA').value.trim(),B:$('feedbackB').value.trim()}
 };
