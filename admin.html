@@ -28,11 +28,27 @@ tr.avg td{font-weight:700;background:#f2f8fb;border-top:2px solid var(--blue)}
 .stat b{display:block;font-size:26px;color:var(--blue)}
 .hidden{display:none!important}.err{color:#a63423;margin:8px 0}
 #login{max-width:360px;margin:60px auto}#login input{width:100%;margin:6px 0}
+#printAll{display:none}
+@page{size:A4;margin:10mm}
+@media print{
+body.printing>*:not(#printAll){display:none!important}
+body.printing{background:white}
+body.printing #printAll{display:block}
+.pg{break-after:page;font-size:12.5px;line-height:1.5}
+.pg:last-child{break-after:auto}
+}
+.pg h1{font-size:22px;margin:0 0 4px;color:var(--blue)}
+.pg .eb{font-size:11px;letter-spacing:2px;color:#668393}
+.pg h3{margin:16px 0 4px;font-size:15px;border-bottom:2px solid var(--green);padding-bottom:3px}
+.pg .row{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid #e5eef3}
+.pg .row b{white-space:nowrap;color:#007db6}
+.pg .ans{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #dce8ef;padding:6px 8px;margin-top:4px}
+.pg .note{color:#688291;font-size:11.5px;margin:3px 0}
 </style>
 </head>
 <body>
 <header><b>滿意度調查｜結果總覽</b>
-<span id="bar" class="hidden"><select id="period"></select> <button id="csv">匯出 CSV</button> <button id="out">登出</button></span></header>
+<span id="bar" class="hidden"><select id="period"></select> <button id="csv">匯出 CSV</button> <button id="pdfAll">匯出全部 PDF</button> <button id="out">登出</button></span></header>
 <main>
 <div id="login" class="card"><h2>管理者登入</h2>
 <input id="email" type="email" placeholder="Email" autocomplete="username">
@@ -41,6 +57,7 @@ tr.avg td{font-weight:700;background:#f2f8fb;border-top:2px solid var(--blue)}
 <button class="primary" id="go" style="width:100%">登入</button></div>
 <div id="view" class="hidden"></div>
 </main>
+<div id="printAll"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 const SUPABASE_URL='https://wjtczazmnxijqgnnndmp.supabase.co';
@@ -116,6 +133,26 @@ ord.map(i=>{const a=avg(R.map(r=>r.scores[i[0]]));return `<td class="n${lowc(a)}
 $('view').innerHTML=h;
 }
 $('period').onchange=render;
+const grade=n=>n>=96?'非常滿意':n>=93?'滿意':n>=90?'普通':n>=70?'不滿意':'非常不滿意';
+const sigHtml=r=>r.signature_type==='draw'&&/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(r.signature||'')?`<img src="${r.signature}" style="height:56px;max-width:60%" alt="簽名">`:`<b>${esc(r.signature||'—')}</b>`;
+$('pdfAll').onclick=()=>{
+const p=$('period').value;
+const R=expand(p).sort((a,b)=>(ordOf(a.branch)-ordOf(b.branch))||a.branch.localeCompare(b.branch,'zh-Hant'));
+if(!R.length)return;
+const fmt=t=>new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
+$('printAll').innerHTML=R.map(r=>`<section class="pg"><div class="eb">QUARTERLY SERVICE SURVEY</div><h1>每季滿意度調查</h1>
+<div class="row"><span>調查期間</span><b>${esc(r.period)}</b></div>
+<div class="row"><span>分公司／單位</span><b>${esc(r.branch)}</b></div>
+<div class="row"><span>主管簽名</span>${r.sig_type==='draw'&&r.signature?'<img src="'+r.signature+'" alt="簽名" style="height:40px;max-width:55%">':'<b>'+esc(r.manager)+'</b>'}</div>
+<div class="row"><span>主管簽名</span>${sigHtml(r)}</div>
+<div class="note">首次送出：${fmt(r.first_submitted_at)}　最近更新：${fmt(r.updated_at)}（臺灣時間）${r.linkedFrom?'<br>本單位資料連結自「'+esc(r.linkedFrom)+'」的填答':''}</div>`+
+D.map(d=>`<h3>${d.name}</h3>`+d.items.map(i=>{const n=r.scores[i[0]];return `<div class="row"><span>${i[1]}｜${esc(i[2])}</span><b>${isNum(n)?n+' 分 · '+grade(n):'—'}</b></div>`}).join('')+
+`<div class="note">建議或其他須改善事項</div><div class="ans">${esc((r.feedback[d.k]||'').trim()||'未填寫')}</div>`).join('')+`</section>`).join('');
+const t=document.title;document.title='滿意度調查_'+p+'_全部分公司';
+document.body.classList.add('printing');
+window.addEventListener('afterprint',()=>{document.body.classList.remove('printing');document.title=t},{once:true});
+window.print();
+};
 $('go').onclick=async()=>{
 $('lerr').textContent='';
 const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('pw').value});
@@ -126,8 +163,8 @@ $('out').onclick=async()=>{await sb.auth.signOut();location.reload()};
 $('csv').onclick=()=>{
 const R=expand($('period').value);
 const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-const head=['調查期間','分公司','主管',...D.flatMap(d=>d.items.map(i=>d.name+'｜'+i[1]+'｜'+i[2])),'個業服務部平均','產業研究部平均','個業服務部建議','產業研究部建議','最後更新'];
-const line=r=>{const da=D.map(d=>dAvg(r,d));return [r.period,r.branch,r.manager,...ALL.map(i=>r.scores[i[0]]),...da.map(f1),r.feedback.A,r.feedback.B,r.updated_at]};
+const head=['調查期間','分公司','主管',...D.flatMap(d=>d.items.map(i=>d.name+'｜'+i[1]+'｜'+i[2])),'個業服務部平均','產業研究部平均','個業服務部建議','產業研究部建議','最後更新','簽名方式'];
+const line=r=>{const da=D.map(d=>dAvg(r,d));return [r.period,r.branch,r.manager,...ALL.map(i=>r.scores[i[0]]),...da.map(f1),r.feedback.A,r.feedback.B,r.updated_at,r.signature_type==='draw'?'手寫':r.signature_type==='type'?'打字':'']};
 const lines=[head,...R.map(line)].map(l=>l.map(c).join(','));
 const a=document.createElement('a');
 a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv'}));
