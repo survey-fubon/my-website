@@ -71,7 +71,7 @@ button:focus-visible{outline:3px solid #90d9f8;outline-offset:3px}
 .reminder{padding:13px 15px}
 }
 @page{size:A4;margin:9mm}
-#sigCanvas{width:100%;height:auto;border:1px dashed #9cb8c9;border-radius:8px;background:#fff;touch-action:none;display:block}
+#sigCanvas{width:100%;max-width:520px;height:auto;border:1px dashed #9cb8c9;border-radius:8px;background:#fff;touch-action:none;display:block}
 .sigtabs{display:flex;gap:8px;margin-bottom:8px}.sigtabs button{padding:7px 14px}
 #sigClear{padding:3px 10px;font-size:12px}
 @media print{
@@ -174,7 +174,7 @@ h2{font-size:14px;margin:0 0 4px}
 <div style="margin-top:16px">
 <label>主管簽名 <span class="req">*</span></label>
 <div class="sigtabs"><button type="button" id="sigDrawBtn" class="primary">手寫簽名</button><button type="button" id="sigTypeBtn">打字簽名</button></div>
-<div id="sigDraw"><canvas id="sigCanvas" width="600" height="180"></canvas><div class="muted">請在框內簽名　<button type="button" id="sigClear">清除重寫</button></div></div>
+<div id="sigDraw"><canvas id="sigCanvas" width="600" height="400"></canvas><div class="muted">請用手指或滑鼠在框內簽名　<button type="button" id="sigClear">清除重寫</button></div></div>
 <div id="sigType" class="hidden"><input id="sigText" maxlength="50" placeholder="請輸入姓名作為簽名"></div>
 </div>
 <p class="muted">簽名可選擇手寫或打字。</p>
@@ -213,12 +213,22 @@ if(!r.ok)throw new Error('HTTP '+r.status);
 const $=id=>document.getElementById(id);
 let sigMode='draw',sigDirty=false,drawing=false;
 const cv=$('sigCanvas'),cx=cv.getContext('2d');
-cx.lineWidth=2.5;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#173d56';
+cx.lineWidth=3.5;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#173d56';
 const pos=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
 cv.addEventListener('pointerdown',e=>{drawing=true;cv.setPointerCapture(e.pointerId);const [x,y]=pos(e);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+.1,y+.1);cx.stroke();sigDirty=true;e.preventDefault()});
 cv.addEventListener('pointermove',e=>{if(!drawing)return;const [x,y]=pos(e);cx.lineTo(x,y);cx.stroke()});
 ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drawing=false}));
 $('sigClear').onclick=()=>{cx.clearRect(0,0,cv.width,cv.height);sigDirty=false};
+function trimSig(){
+const w=cv.width,h=cv.height,d=cx.getImageData(0,0,w,h).data;
+let x0=w,y0=h,x1=0,y1=0;
+for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]>10){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+if(x1<x0)return cv.toDataURL('image/png');
+const pad=8;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(w-1,x1+pad);y1=Math.min(h-1,y1+pad);
+const sw=x1-x0+1,sh=y1-y0+1,k=Math.min(1,360/sw);
+const c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw*k));c.height=Math.max(1,Math.round(sh*k));
+c.getContext('2d').drawImage(cv,x0,y0,sw,sh,0,0,c.width,c.height);
+return c.toDataURL('image/png')}
 function setSig(m){sigMode=m;$('sigDraw').classList.toggle('hidden',m!=='draw');$('sigType').classList.toggle('hidden',m!=='type');
 $('sigDrawBtn').classList.toggle('primary',m==='draw');$('sigTypeBtn').classList.toggle('primary',m==='type');
 }
@@ -325,7 +335,7 @@ output.replaceChildren();
 addRow(output,'調查期間',submitted.period);
 addRow(output,'分公司／單位',submitted.branch);
 const sr=element('div',undefined,'row');sr.append(element('span','主管簽名'));
-if(submitted.sigType==='draw'){const im=document.createElement('img');im.src=submitted.signature;im.alt='主管簽名';im.style.cssText='height:60px;max-width:60%';sr.append(im)}
+if(submitted.sigType==='draw'){const im=document.createElement('img');im.src=submitted.signature;im.alt='主管簽名';im.style.cssText='height:40px;max-width:55%';sr.append(im)}
 else sr.append(element('strong',submitted.signature));
 output.append(sr);
 output.append(
@@ -388,7 +398,7 @@ period:$('period').value,
 branch:$('branch').value.trim(),
 manager:sigMode==='type'?$('sigText').value.trim():'（手寫簽名）',
 sigType:sigMode,
-signature:sigMode==='draw'?cv.toDataURL('image/png'):$('sigText').value.trim(),
+signature:sigMode==='draw'?trimSig():$('sigText').value.trim(),
 scores:Object.fromEntries(questions.map(q=>[q.id,Number($(q.id).value)])),
 feedback:{A:$('feedbackA').value.trim(),B:$('feedbackB').value.trim()}
 };
