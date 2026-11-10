@@ -8,8 +8,10 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    env:
+      SB_URL: https://wjtczazmnxijqgnnndmp.supabase.co
+      SB_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGN6YXptbnhpanFnbm5uZG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNzQ0MDYsImV4cCI6MjEwODY1MDQwNn0.lvUXwnfqvs9OVi5EgmrgVEplJpbhPmmHRedpl4vbJoo
     steps:
       - name: Ping Supabase
         run: |
-          curl -fsS -X POST "https://wjtczazmnxijqgnnndmp.supabase.co/rest/v1/rpc/list_units" \
-            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGN6YXptbnhpanFnbm5uZG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNzQ0MDYsImV4cCI6MjEwODY1MDQwNn0.lvUXwnfqvs9OVi5EgmrgVEplJpbhP
+          curl -fsS -X POST "$SB_URL/rest/v1/rpc/list_units" -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" -H "Content-Type: application/json" -d '{}'
