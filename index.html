@@ -103,7 +103,7 @@ h2.qtitle .num{font-size:14px}
 #itemsA .question h3,#itemsB .question h3{font-size:19.6px}
 }
 /* 下載 PDF 用的隱藏版面（A4 寬度、緊湊排版） */
-.pdfroot{position:fixed;left:-10000px;top:0;width:794px;background:#fff;color:var(--ink);padding:24px 30px;font-size:13px;line-height:1.45}
+.pdfroot{width:794px;box-sizing:border-box;background:#fff;color:var(--ink);padding:24px 30px;font-size:13px;line-height:1.45}
 .pdfroot .printbranch{display:block;text-align:center;font-size:22px;font-weight:800;color:var(--blue);border:2px solid var(--green);border-radius:8px;padding:6px 10px;margin:0 0 8px}
 .pdfroot .card{box-shadow:none;border:0;padding:0;margin:0;background:#fff}
 .pdfroot .result-icon{display:none}
@@ -460,7 +460,7 @@ btn.disabled=true;btn.textContent='產生 PDF 中…';
 const root=document.createElement('div');root.className='pdfroot';
 const head=$('printBranch').cloneNode(true);head.removeAttribute('id');head.textContent=p+'｜'+b;
 const card=$('review').querySelector('.card').cloneNode(true);
-root.append(head,card);document.body.append(root);
+root.append(head,card);
 try{
 await html2pdf().set({margin:[8,8,8,8],filename:fileName,image:{type:'jpeg',quality:0.95},
 html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:794},
