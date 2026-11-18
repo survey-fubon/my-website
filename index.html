@@ -226,7 +226,8 @@ h2.qtitle .num{font-size:14px}
 
 
 </main>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const SUPABASE_URL='https://wjtczazmnxijqgnnndmp.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGN6YXptbnhpanFnbm5uZG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNzQ0MDYsImV4cCI6MjEwODY1MDQwNn0.lvUXwnfqvs9OVi5EgmrgVEplJpbhPmmHRedpl4vbJoo';
@@ -453,21 +454,36 @@ window.scrollTo({top:0,behavior:'smooth'});
 $('print').addEventListener('click',async()=>{
 const btn=$('print'),p=$('period').value,b=$('branch').value,old=btn.textContent;
 const fileName='滿意度調查_'+p+'_'+b+'.pdf';
-if(typeof html2pdf==='undefined'){
+if(!window.html2canvas||!window.jspdf){
 const t=document.title;$('printBranch').textContent=p+'｜'+b;document.title=fileName.replace(/\.pdf$/,'');
 window.addEventListener('afterprint',()=>{document.title=t},{once:true});window.print();return}
 btn.disabled=true;btn.textContent='產生 PDF 中…';
+const overlay=document.createElement('div');
+overlay.style.cssText='position:fixed;left:0;top:0;width:100%;height:100%;background:#fff;z-index:99999';
 const root=document.createElement('div');root.className='pdfroot';
+root.style.cssText+='position:absolute;left:0;top:0';
 const head=$('printBranch').cloneNode(true);head.removeAttribute('id');head.textContent=p+'｜'+b;
-const card=$('review').querySelector('.card').cloneNode(true);
-root.append(head,card);
+root.append(head,$('review').querySelector('.card').cloneNode(true));
+overlay.append(root);document.body.append(overlay);
 try{
-await html2pdf().set({margin:[8,8,8,8],filename:fileName,image:{type:'jpeg',quality:0.95},
-html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:794},
-jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-pagebreak:{mode:['css','avoid-all']}}).from(root).save();
-}catch(e){alert('PDF 產生失敗，請重試。')}
-finally{root.remove();btn.disabled=false;btn.textContent=old}
+window.scrollTo(0,0);
+await Promise.all([...root.querySelectorAll('img')].map(im=>im.decode?im.decode().catch(()=>{}):null));
+await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+const canvas=await html2canvas(root,{scale:2,backgroundColor:'#ffffff',useCORS:true,scrollX:0,scrollY:0,windowWidth:Math.max(794,document.documentElement.clientWidth)});
+const {jsPDF}=window.jspdf;
+const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+const m=8,w=210-2*m,hMax=297-2*m,mmPerPx=w/canvas.width,pagePx=Math.floor(hMax/mmPerPx);
+for(let y=0,n=0;y<canvas.height;y+=pagePx,n++){
+const h=Math.min(pagePx,canvas.height-y);
+const part=document.createElement('canvas');part.width=canvas.width;part.height=h;
+const ctx=part.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,part.width,h);
+ctx.drawImage(canvas,0,y,canvas.width,h,0,0,canvas.width,h);
+if(n)pdf.addPage();
+pdf.addImage(part.toDataURL('image/jpeg',0.95),'JPEG',m,m,w,h*mmPerPx);
+}
+pdf.save(fileName);
+}catch(e){console.error(e);alert('PDF 產生失敗，請重試。')}
+finally{overlay.remove();btn.disabled=false;btn.textContent=old}
 });
 </script>
 </body>
