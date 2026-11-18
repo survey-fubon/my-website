@@ -102,6 +102,17 @@ h2.qtitle .num{font-size:14px}
 @media screen and (max-width:540px){
 #itemsA .question h3,#itemsB .question h3{font-size:19.6px}
 }
+/* 下載 PDF 用的隱藏版面（A4 寬度、緊湊排版） */
+.pdfroot{position:fixed;left:-10000px;top:0;width:794px;background:#fff;color:var(--ink);padding:24px 30px;font-size:13px;line-height:1.45}
+.pdfroot .printbranch{display:block;text-align:center;font-size:22px;font-weight:800;color:var(--blue);border:2px solid var(--green);border-radius:8px;padding:6px 10px;margin:0 0 8px}
+.pdfroot .card{box-shadow:none;border:0;padding:0;margin:0;background:#fff}
+.pdfroot .result-icon{display:none}
+.pdfroot .success-title{font-size:16px;margin:0 0 2px}
+.pdfroot h2{font-size:15px;margin:0 0 4px}
+.pdfroot .row{padding:3px 0}.pdfroot .row strong{font-size:13px}
+.pdfroot .muted{font-size:11.5px;margin:2px 0}
+.pdfroot .review-section{margin-top:10px}
+.pdfroot .answer{background:#fff;border:1px solid #dce8ef;padding:5px 8px;font-size:12px}
 </style>
 </head>
 <body>
@@ -209,12 +220,13 @@ h2.qtitle .num{font-size:14px}
 </section>
 <div class="actions">
 <button type="button" id="edit" class="primary">返回修改</button>
-<button type="button" id="print">列印／另存 PDF</button>
+<button type="button" id="print">下載 PDF</button>
 </div>
 </div>
 
 
 </main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
 const SUPABASE_URL='https://wjtczazmnxijqgnnndmp.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGN6YXptbnhpanFnbm5uZG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNzQ0MDYsImV4cCI6MjEwODY1MDQwNn0.lvUXwnfqvs9OVi5EgmrgVEplJpbhPmmHRedpl4vbJoo';
@@ -438,12 +450,25 @@ $('editHint').textContent='正在修改原問卷，請重新確認內容';
 $('branch').focus({preventScroll:true});
 window.scrollTo({top:0,behavior:'smooth'});
 });
-$('print').addEventListener('click',()=>{
-const t=document.title,p=$('period').value,b=$('branch').value;
-$('printBranch').textContent=p+'｜'+b;
-document.title='滿意度調查_'+p+'_'+b;
-window.addEventListener('afterprint',()=>{document.title=t},{once:true});
-window.print()});
+$('print').addEventListener('click',async()=>{
+const btn=$('print'),p=$('period').value,b=$('branch').value,old=btn.textContent;
+const fileName='滿意度調查_'+p+'_'+b+'.pdf';
+if(typeof html2pdf==='undefined'){
+const t=document.title;$('printBranch').textContent=p+'｜'+b;document.title=fileName.replace(/\.pdf$/,'');
+window.addEventListener('afterprint',()=>{document.title=t},{once:true});window.print();return}
+btn.disabled=true;btn.textContent='產生 PDF 中…';
+const root=document.createElement('div');root.className='pdfroot';
+const head=$('printBranch').cloneNode(true);head.removeAttribute('id');head.textContent=p+'｜'+b;
+const card=$('review').querySelector('.card').cloneNode(true);
+root.append(head,card);document.body.append(root);
+try{
+await html2pdf().set({margin:[8,8,8,8],filename:fileName,image:{type:'jpeg',quality:0.95},
+html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:794},
+jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+pagebreak:{mode:['css','avoid-all']}}).from(root).save();
+}catch(e){alert('PDF 產生失敗，請重試。')}
+finally{root.remove();btn.disabled=false;btn.textContent=old}
+});
 </script>
 </body>
 </html>
