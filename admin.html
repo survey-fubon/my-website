@@ -28,6 +28,16 @@ tr.avg td{font-weight:700;background:#f2f8fb;border-top:2px solid var(--blue)}
 .stat b{display:block;font-size:26px;color:var(--blue)}
 .hidden{display:none!important}.err{color:#a63423;margin:8px 0}
 #login{max-width:360px;margin:60px auto}#login input{width:100%;margin:6px 0}
+details.edit{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+details summary{cursor:pointer;font-weight:700;padding:4px 0}
+details details{margin:6px 0 6px 14px;background:#f7fbfd;border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.grp{margin:8px 0}.grp>b{font-size:13px;color:#688291}
+.chk{display:inline-block;margin:3px 12px 3px 0;font-size:13px;white-space:nowrap;cursor:pointer}
+.chk input{padding:0;margin-right:4px}
+.addrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.addrow input{width:140px}
+.ops{margin:6px 0}.ops button{font-size:13px;padding:4px 10px;margin-right:6px}
+.dang{color:#a63423;border-color:#e0b4ac}
 #printAll{display:none}
 @page{size:A4;margin:10mm}
 @media print{
@@ -78,17 +88,24 @@ const pkey=p=>{const m=/(\d+) 年第(.)季/.exec(p);return m?m[1]*10+(QN[m[2]]||
 const prevPeriod=p=>{const m=/(\d+) 年第(.)季/.exec(p);if(!m)return '';let y=+m[1],q=QN[m[2]]-1;if(!q){y--;q=4}return y+' 年第'+'一二三四'[q-1]+'季'};
 const dAvg=(r,d)=>avg(d.items.map(i=>r.scores[i[0]]));
 const prevAvg=(branch,d,pp)=>avg(expand(pp).filter(r=>r.branch===branch).map(r=>dAvg(r,d)));
-let rows=[],links=[],units=[];
+let rows=[],links=[],units=[],staff=[],assigns=[],staffErr='';
+const openSet=new Set();let editOpen=false;
 function expand(p){const base=rows.filter(r=>r.period===p),own=new Set(base.map(r=>r.branch)),ex=[];
 links.forEach(l=>{const s=base.find(r=>r.branch===l.source_branch);
 if(s&&!own.has(l.linked_branch)){own.add(l.linked_branch);ex.push({...s,branch:l.linked_branch,linkedFrom:l.source_branch})}});
 return [...base,...ex]}
+async function loadStaff(){
+const a=await sb.from('staff_members').select('*').order('sort_no').order('id');
+const b=await sb.from('staff_assignments').select('*');
+if(a.error||b.error){staffErr=(a.error||b.error).message;staff=[];assigns=[];return}
+staffErr='';staff=a.data||[];assigns=b.data||[]}
 async function load(){
 const {data,error}=await sb.from('survey_responses').select('*');
 if(error){$('lerr').textContent='讀取失敗：'+error.message;return false}
 rows=data;
 const L=await sb.from('branch_links').select('*');links=L.data||[];
 const UN=await sb.from('survey_units').select('*').order('sort_no');units=UN.data||[];
+await loadStaff();
 const ps=[...new Set(rows.map(r=>r.period))].sort((a,b)=>pkey(b)-pkey(a));
 $('period').innerHTML=ps.map(p=>`<option>${esc(p)}</option>`).join('');
 $('login').classList.add('hidden');$('bar').classList.remove('hidden');$('view').classList.remove('hidden');
@@ -113,7 +130,7 @@ const lows=R.flatMap(r=>ALL.map(i=>r.scores[i[0]])).filter(n=>isNum(n)&&n<90).le
 let h=`<div class="card stats"><div class="stat"><b>${R.length}${units.length?'／'+units.length:''}</b>已填答單位</div>`+
 D.map((d,x)=>`<div class="stat"><b class="${lowc(dAvgs[x]).trim()}">${f1(dAvgs[x])}</b>${d.name}・所有分公司平均</div>`).join('')+
 `<div class="stat"><b>${lows}</b>低於 90 分的項目數</div></div>`;
-h+=missCard(R);
+h+=missCard(R)+staffCard(R,pp);
 D.forEach((d,x)=>{
 const cats=['刊物','服務'].map(c=>[c,d.items.filter(i=>i[1]===c)]).filter(c=>c[1].length);
 const ord=cats.flatMap(c=>c[1]);
@@ -132,6 +149,64 @@ ord.map(i=>{const a=avg(R.map(r=>r.scores[i[0]]));return `<td class="n${lowc(a)}
 });
 $('view').innerHTML=h;
 }
+function staffCard(R,pp){
+const d=D[0],it=d.items;
+let h=`<div class="card"><h2>同事負責分公司平均<span class="sub">　${d.name}・只計已回覆單位</span></h2>`;
+if(staffErr)return h+`<div class="err">讀取失敗：${esc(staffErr)}（請先執行 staff_setup.sql 建立資料表）</div></div>`;
+const PR=expand(pp);
+const mineOf=s=>new Set(assigns.filter(a=>a.staff_id===s.id).map(a=>a.branch));
+if(!staff.length)h+='<div>尚未設定同事，請在下方「編輯對應」新增。</div>';
+else{
+h+=`<table><tr><th>同事</th><th class="n wrap">已回覆／負責</th>`+it.map(i=>`<th class="n wrap">${esc(i[2])}</th>`).join('')+`<th class="n wrap">平均</th><th class="n wrap">前期平均<div class="sub">${esc(pp)}</div></th></tr>`;
+staff.forEach(s=>{const set=mineOf(s),mine=R.filter(r=>set.has(r.branch));
+const a=avg(mine.map(r=>dAvg(r,d))),pv=avg(PR.filter(r=>set.has(r.branch)).map(r=>dAvg(r,d)));
+h+=`<tr><td>${esc(s.name)}${s.code?' <span class="sub">'+esc(s.code)+'</span>':''}</td><td class="n">${mine.length}／${set.size}</td>`+
+it.map(i=>{const v=avg(mine.map(r=>r.scores[i[0]]));return `<td class="n${lowc(v)}">${f1(v)}</td>`}).join('')+
+`<td class="n${lowc(a)}"><b>${f1(a)}</b></td><td class="n">${f1(pv)}</td></tr>`});
+h+='</table>';}
+const names=units.length?units:[...new Set(rows.map(r=>r.branch))].map(n=>({name:n,kind:'其他'}));
+const g={};names.forEach(u=>{const k=u.kind==='分公司'?(u.parent||'分公司'):u.kind;(g[k]=g[k]||[]).push(u.name)});
+const known=new Set(names.map(u=>u.name));
+const owned=new Set(assigns.map(a=>a.branch));
+const unassigned=names.filter(u=>!owned.has(u.name)).map(u=>u.name);
+h+=`<details class="edit" id="editBox"${editOpen?' open':''}><summary>編輯對應</summary>`;
+staff.forEach(s=>{const set=mineOf(s);
+h+=`<details data-sid="${s.id}"${openSet.has(s.id)?' open':''}><summary>${esc(s.name)}${s.code?'（'+esc(s.code)+'）':''}<span class="sub">　負責 ${set.size} 個單位</span></summary>
+<div class="ops"><button data-act="rename" data-sid="${s.id}">改名／代號</button><button class="dang" data-act="del" data-sid="${s.id}">刪除同事</button></div>`;
+const bad=[...set].filter(b=>!known.has(b));
+if(bad.length)h+=`<p class="err">名單外的單位（名稱可能不一致）：${bad.map(esc).join('、')}</p>`;
+Object.entries(g).forEach(([k,v])=>{h+=`<div class="grp"><b>${esc(k)}</b><br>`+v.map(n=>{
+const others=staff.filter(o=>o.id!==s.id&&assigns.some(a=>a.staff_id===o.id&&a.branch===n)).map(o=>o.code||o.name);
+return `<label class="chk"><input type="checkbox" data-sid="${s.id}" data-branch="${esc(n)}"${set.has(n)?' checked':''}>${esc(n)}${others.length?'<span class="sub">（'+others.map(esc).join('、')+'）</span>':''}</label>`}).join('')+`</div>`});
+h+=`</details>`});
+h+=`<div class="addrow"><input id="newName" placeholder="新同事姓名"><input id="newCode" placeholder="代號（選填）"><button class="primary" data-act="add">新增同事</button></div>`;
+if(unassigned.length)h+=`<p class="sub">尚未指派給任何同事的單位（${unassigned.length}）：${unassigned.map(esc).join('、')}</p>`;
+return h+`</details></div>`}
+$('view').addEventListener('toggle',e=>{const t=e.target;if(t.id==='editBox')editOpen=t.open;else if(t.dataset&&t.dataset.sid){const id=+t.dataset.sid;t.open?openSet.add(id):openSet.delete(id)}},true);
+$('view').addEventListener('change',async e=>{const c=e.target;if(!(c.type==='checkbox'&&c.dataset.sid))return;
+const sid=+c.dataset.sid,branch=c.dataset.branch;c.disabled=true;
+const q=c.checked?sb.from('staff_assignments').insert({staff_id:sid,branch}):sb.from('staff_assignments').delete().eq('staff_id',sid).eq('branch',branch);
+const {error}=await q;
+if(error){alert('儲存失敗：'+error.message);c.checked=!c.checked;c.disabled=false;return}
+if(c.checked)assigns.push({staff_id:sid,branch});else assigns=assigns.filter(a=>!(a.staff_id===sid&&a.branch===branch));
+render()});
+$('view').addEventListener('click',async e=>{const b=e.target.closest('button[data-act]');if(!b)return;
+const act=b.dataset.act,sid=+b.dataset.sid,s=staff.find(x=>x.id===sid);
+if(act==='add'){const name=$('newName').value.trim(),code=$('newCode').value.trim();if(!name)return;
+const sort_no=Math.max(0,...staff.map(x=>x.sort_no||0))+1;
+const {data,error}=await sb.from('staff_members').insert({name,code:code||null,sort_no}).select().single();
+if(error){alert('新增失敗：'+error.message);return}
+staff.push(data);openSet.add(data.id);editOpen=true;render()}
+else if(act==='rename'&&s){const name=prompt('姓名',s.name);if(name===null)return;const code=prompt('代號（可留空）',s.code||'');if(code===null)return;
+if(!name.trim())return;
+const {error}=await sb.from('staff_members').update({name:name.trim(),code:code.trim()||null}).eq('id',sid);
+if(error){alert('修改失敗：'+error.message);return}
+s.name=name.trim();s.code=code.trim()||null;render()}
+else if(act==='del'&&s){if(!confirm('確定刪除「'+s.name+'」及其對應的所有分公司？'))return;
+const {error}=await sb.from('staff_members').delete().eq('id',sid);
+if(error){alert('刪除失敗：'+error.message);return}
+staff=staff.filter(x=>x.id!==sid);assigns=assigns.filter(a=>a.staff_id!==sid);render()}
+});
 $('period').onchange=render;
 const grade=n=>n>=96?'非常滿意':n>=93?'滿意':n>=90?'普通':n>=70?'不滿意':'非常不滿意';
 const sigHtml=r=>r.signature_type==='draw'&&/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(r.signature||'')?`<img src="${r.signature}" style="height:56px;max-width:60%" alt="簽名">`:`<b>${esc(r.signature||'—')}</b>`;
